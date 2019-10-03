@@ -10,11 +10,18 @@ import urllib
 
 import requests
 
-Channel = collections.namedtuple('Channel', ['name', 'url', 'extras'])
+import pprint
+
+# Channel = collections.namedtuple('Channel', ['name', 'url', 'extras'])
+Channel = collections.namedtuple('Channel', ['name', 'url', 'logo', 'extras'])
 
 
 class ParseVLC(object):
-    line_regex = re.compile("#EXT(?P<tag>\w+):(?P<value>.*)")
+
+    # line_regex = re.compile("#EXT(?P<tag>\\w+):(?P<value>-?\\d+) (?P<param>.*)")
+    # line_regex = re.compile("#EXT(?P<tag>\\w+):(?P<value>-?\\d+) +tvg-ID=\"(?P<tvg_ID>[^\"]*)\" +(?P<param>.*)")
+    # line_regex = re.compile("#EXT(?P<tag>\\w+):(?P<value>-?\\d+) +tvg-ID=\"(?P<tvg_ID>[^\"]*)\" +tvg-name=\"(?P<tvg_name>[^\"]*)\" +(?P<param>.*)")
+    line_regex = re.compile("#EXT(?P<tag>\\w+):(?P<value>-?\\d+) +tvg-ID=\"(?P<tvg_ID>[^\"]*)\" +tvg-name=\"(?P<tvg_name>[^\"]*)\" +tvg-logo=\"(?P<tvg_logo>[^\"]*)\" +group-title=\"(?P<group_title>[^\"]*)\" *, *(?P<name>[^,]+)")
 
     def __init__(self, file_handle):
         self.file = file_handle
@@ -42,23 +49,31 @@ class ParseVLC(object):
     def parse_section(self, section):
         name = None
         url = None
+        logo = None
         extras = {}
 
         for line in section:
             m = self.line_regex.match(line)
-
-
             if m:
-                tag, value = m.groups()
+                tag, value, tvg_id, tvg_name, tvg_logo, group_title, name = m.groups()
                 if tag == 'INF':
-                    _, name = value.split(',')
+                    # print('Value:', value)
+                    # print('tvg-ID:', tvg_id)
+                    # print('tvg-name:', tvg_name)
+                    # print('tvg-logo:', tvg_logo)
+                    # print('group-title:', group_title)
+                    # print('name:', name)
+                    logo = tvg_logo
+                    extras['tvg-ID'] = tvg_id
+                    extras['tvg-name'] = tvg_name
+                    extras['group-title'] = group_title
                 if tag == 'VLCOPT':
                     key, val = value.split('=')
                     extras[key] = val
             else:
                 url = line
 
-        return Channel(name, url, extras)
+        return Channel(name, url, logo, extras)
 
 
 """
@@ -112,6 +127,8 @@ class TvheadendAPI(object):
 
         network_uuid = uuid_request['entries'][0]['key']
 
+        # Copié de ... https://github.com/edit4ever/script.module.tvh2kodi/blob/master/default.py
+        #     mux_create_url = 'http://' + tvh_url + ':' + tvh_port + '/api/mpegts/network/mux_create?conf={"enabled":1,"epg":1,"iptv_url":"' + sel_url + '","iptv_atsc":' + str(sel_atsc) + ',"iptv_muxname":"' + str(sel_name) + '","channel_number":"' + str(sel_chnum) + '","iptv_sname":"' + str(sel_service) + '","scan_state":0,"charset":"","priority":0,"spriority":0,"iptv_substitute":false,"iptv_interface":"","iptv_epgid":"","iptv_icon":"","iptv_tags":"","iptv_satip_dvbt_freq":0,"iptv_buffer_limit":0,"tsid_zero":false,"pmt_06_ac3":0,"eit_tsid_nocheck":false,"sid_filter":0,"iptv_respawn":false,"iptv_kill":0,"iptv_kill_timeout":5,"iptv_env":"","iptv_hdr":""}&uuid=' + str(net_uuid_sel)
         self.post("/api/mpegts/network/mux_create", data={
             'uuid': network_uuid,
             'conf': json.dumps({
@@ -121,9 +138,31 @@ class TvheadendAPI(object):
                 "iptv_sname": channel.name,
                 "iptv_url": channel.url,
                 "iptv_interface": self.interface,
+                "iptv_icon": channel.logo,
                 "charset": "AUTO"
             })
         })
+
+    def add_mux_test(self, channel):
+        "Simulation add_mux"
+        network_uuid = 'unknown in test mode'
+        data = {
+            'uuid': network_uuid,
+            'conf': json.dumps({
+                "enabled": 1,
+                "skipinitscan": 1,
+                "iptv_muxname": channel.name,
+                "iptv_sname": channel.name,
+                "iptv_url": channel.url,
+                "iptv_interface": self.interface,
+                "iptv_icon": channel.logo,
+                "charset": "AUTO"
+            })
+        }
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(data)
+        print('extras: ')
+        pp.pprint(channel.extras)
 
     def list_muxes(self):
         res = self.post("/api/mpegts/mux/grid", data={
@@ -132,9 +171,9 @@ class TvheadendAPI(object):
             'sort': 'name',
             'dir': 'ASC',
         })
-
         for mux in res['entries']:
             yield Channel(mux['name'], mux['iptv_url'], mux)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -154,11 +193,13 @@ if __name__ == '__main__':
                        args.interface)
 
     # Create a dict of the URL's of known channels:
-    known_channels = {m.url: m for m in tvh.list_muxes()}
+    # known_channels = {m.url: m for m in tvh.list_muxes()}
+    known_channels = {}
 
     for channel in m3u_parser:
+        print('Adding muxes to TvheadendAPI...')
         if channel.url not in known_channels:
-            print('added: {} at {}'.format(channel.name, channel.url))
             tvh.add_mux(channel)
+            print('added: {} at {}'.format(channel.name, channel.url))
         else:
             print('skipped: {} at {}'.format(channel.name, channel.url))
