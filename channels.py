@@ -11,6 +11,7 @@ import urllib
 import requests
 
 import pprint
+import time
 
 # Channel = collections.namedtuple('Channel', ['name', 'url', 'extras'])
 Channel = collections.namedtuple('Channel', ['name', 'url', 'logo', 'extras'])
@@ -196,6 +197,7 @@ if __name__ == '__main__':
     # known_channels = {m.url: m for m in tvh.list_muxes()}
     known_channels = {}
 
+    compteur = 1
     for channel in m3u_parser:
         print('Adding muxes to TvheadendAPI...')
         if channel.url not in known_channels:
@@ -203,3 +205,6 @@ if __name__ == '__main__':
             print('added: {} at {}'.format(channel.name, channel.url))
         else:
             print('skipped: {} at {}'.format(channel.name, channel.url))
+        if compteur % 10 == 0:
+            time.sleep(30)
+        compteur += 1
