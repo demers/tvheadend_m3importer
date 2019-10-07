@@ -206,5 +206,5 @@ if __name__ == '__main__':
         else:
             print('skipped: {} at {}'.format(channel.name, channel.url))
         if compteur % 10 == 0:
-            time.sleep(30)
+            time.sleep(60)
         compteur += 1
