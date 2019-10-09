@@ -58,12 +58,6 @@ class ParseVLC(object):
             if m:
                 tag, value, tvg_id, tvg_name, tvg_logo, group_title, name = m.groups()
                 if tag == 'INF':
-                    # print('Value:', value)
-                    # print('tvg-ID:', tvg_id)
-                    # print('tvg-name:', tvg_name)
-                    # print('tvg-logo:', tvg_logo)
-                    # print('group-title:', group_title)
-                    # print('name:', name)
                     logo = tvg_logo
                     extras['tvg-ID'] = tvg_id
                     extras['tvg-name'] = tvg_name
@@ -193,18 +187,20 @@ if __name__ == '__main__':
     tvh = TvheadendAPI(args.tvheadend_url, args.user, args.password,
                        args.interface)
 
-    # Create a dict of the URL's of known channels:
-    # known_channels = {m.url: m for m in tvh.list_muxes()}
-    known_channels = {}
+    # Create a list of group titles
+    known_groups_title = ['SPORTS', 'ENGLISH', 'FRENCH']
 
     compteur = 1
     for channel in m3u_parser:
-        print('Adding muxes to TvheadendAPI...')
-        if channel.url not in known_channels:
+        # if channel.extras['group-title'].find('FRENCH'):
+        # if 'FRENCH' in channel.extras['group-title']:
+
+        if any(x in channel.extras['group-title'] for x in known_groups_title):
+            print('Adding muxes to TvheadendAPI...')
             tvh.add_mux(channel)
-            print('added: {} at {}'.format(channel.name, channel.url))
-        else:
-            print('skipped: {} at {}'.format(channel.name, channel.url))
-        if compteur % 10 == 0:
+            print('({}): added: {} at {}'.format(compteur, channel.name, channel.url))
+        # else:
+            # print('({}): skipped: {} at {}'.format(compteur, channel.name, channel.url))
+        if compteur % 25 == 0:
             time.sleep(60)
         compteur += 1
